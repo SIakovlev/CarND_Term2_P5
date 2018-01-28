@@ -1,3 +1,5 @@
+[image1]: ./pics/position.png
+
 # Model Predictive Control
 
 In this project I have implemented Model Predictive Control algorithm that drives the car around the track in [simulator](https://github.com/udacity/self-driving-car-sim/releases). There is an additional challenge: a 100 millisecond latency between actuations commands on top of the connection latency that I had to deal with.
@@ -54,3 +56,46 @@ const int w_delta_diff =  10; // change in steering actuator action weight
 const int w_a_diff =      10; // change in acceleration actuator action weight
 ```
 
+### MPC preprocessing. Latency
+
+#### Conversion to a local reference frame:
+
+```cpp
+// Convert ptsx and ptsy to local reference frame
+vector<double> x_refs = {};
+vector<double> y_refs = {};
+double cos_psi = std::cos(psi);
+double sin_psi = std::sin(psi);
+for (size_t i=0; i < ptsx.size(); ++i) {
+  double x_local = cos_psi*(ptsx[i] - px) + sin_psi*(ptsy[i] - py);
+  double y_local = cos_psi*(ptsy[i] - py) - sin_psi*(ptsx[i] - px);
+  x_refs.push_back(x_local);
+  y_refs.push_back(y_local);
+} 
+```
+
+#### Latency. Prediciton of reference points
+
+```cpp
+const int delay = 100; 
+const double Lf = 2.67; 
+const double dt = ((delay) ? delay/1000.0 : 0.0);
+double dx = v * std::cos(psi) * dt;
+double dy = v * std::sin(psi) * dt;
+// predict coordinates for the reference trajectory
+if (delay) {
+    px += dx;
+    py += dy;
+    psi -= v/Lf * steer_value * deg2rad(25.0) * dt;    
+}
+// ...
+// conversion to a local reference frame
+```
+
+#### Latency. Initial state prediction
+
+
+
+### Results
+
+![alt_text][image1]
