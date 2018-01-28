@@ -8,7 +8,7 @@ using CppAD::AD;
 // TODO: done
 // Set the timestep length and duration
 size_t N = 5;
-double dt = 0.3;
+double dt = 0.5;
 
 // This value assumes the model presented in the classroom is used.
 //
@@ -41,7 +41,7 @@ const AD<double> v_ref = 30;
 
 const int w_cte =         1000;
 const int w_epsi =        1000;
-const int w_delta =       10;
+const int w_delta =       1;
 const int w_a =           1;
 //const int w_epsi_diff = 100;
 const int w_vel_diff =    1;
@@ -126,8 +126,8 @@ class FG_eval {
       AD<double> delta0 = vars[delta_start + t - 1];
       AD<double> a0 = vars[a_start + t - 1];
 
-      AD<double> f0 = coeffs[0] + coeffs[1] * x0 + coeffs[2] * CppAD::pow(x0, 2) + coeffs[3] * CppAD::pow(x0, 3);
-      AD<double> f_prime0 = CppAD::atan(coeffs[1] + 2*coeffs[2]*x0 + 3*coeffs[3]*CppAD::pow(x0, 2));
+      AD<double> f0 = coeffs[0] + coeffs[1] * x0 + coeffs[2] * CppAD::pow(x0, 2);
+      AD<double> f_prime0 = CppAD::atan(coeffs[1] + 2*coeffs[2]*x0);
 
       fg[x_start + t + 1] = x1 - (x0 + v0 * CppAD::cos(psi0) * dt);
       fg[y_start + t + 1] = y1 - (y0 + v0 * CppAD::sin(psi0) * dt);

@@ -82,8 +82,9 @@ int main() {
   std::vector<double> data_cte;
   std::vector<double> data_epsi;
   std::vector<std::vector<double>> data_position(4);
+  bool stop_flag = false;
 
-  h.onMessage([&mpc, &data_steer, &data_acceleration, &data_cte, &data_epsi, &data_position](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&mpc, &data_steer, &data_acceleration, &data_cte, &data_epsi, &data_position, &stop_flag](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -96,6 +97,8 @@ int main() {
         auto j = json::parse(s);
         string event = j[0].get<string>();
         if (event == "telemetry") {
+
+
           // j[1] is the data JSON object
           vector<double> ptsx = j[1]["ptsx"];
           vector<double> ptsy = j[1]["ptsy"];
@@ -104,52 +107,87 @@ int main() {
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
 
+          v = v * 0.44704; // convert to ms
+          // make them static for state updates due to delay in the controller
+          static double steer_value = 0.0;
+          static double throttle_value = 0.0;
+
           /*
-          * TODO: Calculate steering angle and throttle using MPC.
-          *
+          * TODO: done
+          * Calculate steering angle and throttle using MPC.
           * Both are in between [-1, 1].
           *
           */
-          const int delay = 0;
 
-          // 1. Convert ptsx and ptsy to local coordinate frame
-          vector<double> x_refs = {};
-          vector<double> y_refs = {};
-          for (size_t i=0; i < ptsx.size(); ++i) {
-            double x_local = std::cos(psi)*(ptsx[i] - px) + std::sin(psi)*(ptsy[i] - py);
-            double y_local = std::cos(psi)*(ptsy[i] - py) - std::sin(psi)*(ptsx[i] - px);
-            x_refs.push_back(x_local);
-            y_refs.push_back(y_local);
-          } 
-
-          // 2. Construct state in local coordinate frame
+          // Construct state in local coordinate frame
           Eigen::VectorXd state(6);
           double x = 0.0;
           double y = 0.0;
-          psi = 0;
-          v *= 0.44704; // convert miles/h to m/s
+          double psi_local = 0.0;
+          // Convert ptsx and ptsy to local coordinate frame
+          vector<double> x_refs = {};
+          vector<double> y_refs = {};
+          double cos_psi = std::cos(psi);
+          double sin_psi = std::sin(psi);
+          for (size_t i=0; i < ptsx.size(); ++i) {
+            double x_local = cos_psi*(ptsx[i] - px) + sin_psi*(ptsy[i] - py);
+            double y_local = cos_psi*(ptsy[i] - py) - sin_psi*(ptsx[i] - px);
+            x_refs.push_back(x_local);
+            y_refs.push_back(y_local);
+          } 
+          // fit polynomial to updated reference trajectory coordinates
           Eigen::VectorXd xpoints = Eigen::Map<Eigen::VectorXd>(x_refs.data(), x_refs.size());
           Eigen::VectorXd ypoints = Eigen::Map<Eigen::VectorXd>(y_refs.data(), y_refs.size());
-          Eigen::VectorXd coeffs = polyfit(xpoints, ypoints, 3);
+          Eigen::VectorXd coeffs = polyfit(xpoints, ypoints, 2);
           double cte = -coeffs[0]; // since y = 0 in local coordinate frame            
-          double epsi = -std::atan(coeffs[1]); // since psi = 0 in local coordinate frame 
+          double epsi = -std::atan(coeffs[1]); // since psi = 0 in local coordinate frame  
 
-          /*
+          // Because of delay we propagate state in time so that MPC initial condition is not the current one,
+          // but the one after 100 milliseconds
+          const int delay = 100; 
+          const double Lf = 2.67; 
+          const double dt = ((delay) ? delay/1000.0 : 0.0);
+          double dx = v * std::cos(psi) * dt;
+          double dy = v * std::sin(psi) * dt;
+          // predict coordinates for the reference trajectory
           if (delay) {
-            double dt = delay/1000;
-            x += v*std::cos(psi)*dt;
-            y += v*std::sin(psi)*dt;
-          }*/          
-          
-          state << x, y, psi, v, cte, epsi;
+              px += dx;
+              py += dy;
+              psi -= v/Lf * steer_value * deg2rad(25.0) * dt;    
+          }
+          cos_psi = std::cos(psi);
+          sin_psi = std::sin(psi);
+          x_refs = {};
+          y_refs = {};
+          for (size_t i=0; i < ptsx.size(); ++i) {
+            double x_local = cos_psi*(ptsx[i] - px) + sin_psi*(ptsy[i] - py);
+            double y_local = cos_psi*(ptsy[i] - py) - sin_psi*(ptsx[i] - px);
+            x_refs.push_back(x_local);
+            y_refs.push_back(y_local);
+          } 
+          // fit polynomial to updated reference trajectory coordinates
+          xpoints = Eigen::Map<Eigen::VectorXd>(x_refs.data(), x_refs.size());
+          ypoints = Eigen::Map<Eigen::VectorXd>(y_refs.data(), y_refs.size());
+          coeffs = polyfit(xpoints, ypoints, 2);
+          if (delay) {
+            x += v * std::cos(psi_local) * dt;
+            y += v * std::sin(psi_local) * dt;
+            std::vector<double> f_df = polyeval(coeffs, x);
+            psi_local -= v/Lf * steer_value * deg2rad(25.0) * dt;
+            v += throttle_value * dt;
+            cte += v * std::sin(epsi) * dt;
+            epsi -= v/Lf * steer_value * deg2rad(25.0) * dt;
+          }
 
-          std::cout << "State: " << std::endl <<  state << std::endl;
+          state << x, y, psi_local, v, cte, epsi;
+
+          // std::cout << "State: " << std::endl <<  state << std::endl;
           
           std::vector<std::vector<double>> result = mpc.Solve(state, coeffs);
+          steer_value = result[2][0]/deg2rad(25.0);
+          throttle_value = result[2][1];
 
-          double steer_value = result[2][0]/deg2rad(25.0);
-          double throttle_value = result[2][1];
-
+          // Visualisation data
           data_steer.push_back(steer_value);
           data_acceleration.push_back(throttle_value);
           data_cte.push_back(cte);
@@ -223,15 +261,17 @@ int main() {
         plt::plot(data_epsi);
         plt::grid(true);
         plt::show();
-
+        */
 
         plt::subplot(1, 1, 1);
         plt::title("Position");
-        plt::plot(data_position[0], data_position[1], "r--", data_position[2], data_position[3], "k");
+        plt::named_plot("Reference trajectory", data_position[0], data_position[1], "r--");
+        plt::named_plot("Actual trajectory", data_position[2], data_position[3], "k");
+        plt::legend();
         plt::grid(true);
         plt::show();
-        */
-        return 0;
+        
+        stop_flag = true;
       }
     }
   });
@@ -268,4 +308,5 @@ int main() {
     return -1;
   }
   h.run();
+  if (stop_flag) return 0;
 }
