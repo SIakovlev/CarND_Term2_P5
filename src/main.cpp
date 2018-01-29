@@ -119,12 +119,12 @@ int main() {
           *
           */
 
-          // Construct state in local coordinate frame
+          // Construct state in local reference frame
           Eigen::VectorXd state(6);
           double x = 0.0;
           double y = 0.0;
           double psi_local = 0.0;
-          // Convert ptsx and ptsy to local coordinate frame
+          // Convert ptsx and ptsy to local reference frame
           vector<double> x_refs = {};
           vector<double> y_refs = {};
           double cos_psi = std::cos(psi);

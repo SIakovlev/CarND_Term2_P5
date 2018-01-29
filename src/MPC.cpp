@@ -37,16 +37,16 @@ size_t a_start = delta_start + N-1; // since there are N-1 actuators for N steps
 const size_t state_dim = 6;
 const size_t act_dim = 2;
 
-const AD<double> v_ref = 30;
+const AD<double> v_ref =  30;
 
-const int w_cte =         1000;
-const int w_epsi =        1000;
-const int w_delta =       1;
-const int w_a =           1;
+const int w_cte =         1000; // cross-track error weight
+const int w_epsi =        1000; // orientation error weight
+const int w_delta =       1; // steering actuator action weight
+const int w_a =           1; // acceleration actuator action weight
+const int w_vel_diff =    1; // v - v_ref weight
+const int w_delta_diff =  10; // change in steering actuator action weight
+const int w_a_diff =      10; // change in acceleration actuator action weight
 //const int w_epsi_diff = 100;
-const int w_vel_diff =    1;
-const int w_delta_diff =  10;
-const int w_a_diff =      10;
 
 class FG_eval {
  public:
