@@ -2,7 +2,7 @@
 
 # Model Predictive Control
 
-In this project I have implemented Model Predictive Control algorithm that drives the car around the track in [simulator](https://github.com/udacity/self-driving-car-sim/releases). There is an additional challenge: a 100 millisecond latency between actuations commands on top of the connection latency that I had to deal with.
+In this project I have implemented Model Predictive Control algorithm that drives the car around the track in Udacity [car simulator](https://github.com/udacity/self-driving-car-sim/releases). There is an additional challenge: a 100 millisecond latency between actuations commands on top of the connection latency that I had to deal with.
 
 ### Compilation and building instructions
 
@@ -45,6 +45,8 @@ In this project I have implemented Model Predictive Control algorithm that drive
 
 `dt` - time step. Again, this parameter depends on computer hardware. In case `dt` is small the controller calculates "very detailed" trajectory consisting of `N` pieces. The price for it is the need for fast computations between consecutive trajectory points. In my case, I observed increasing vehicle wiggling when dt is comparably small to the MPC algorithm execution time. So I set it to `dt = 0.5`.
 
+The following code snippet demonstrates how I tuned cost function:
+
 ```cpp
 const AD<double> v_ref =  30; // reference velocity
 const int w_cte =         1000; // cross-track error weight
@@ -55,10 +57,13 @@ const int w_vel_diff =    1; // v - v_ref weight
 const int w_delta_diff =  10; // change in steering actuator action weight
 const int w_a_diff =      10; // change in acceleration actuator action weight
 ```
+Number one preferences are cross-track error and orientation error, then derivatives of actuator actions so that the trajectory of car movement stayed smooth enough. Finally, following velocity reference and reducing the amount of actuators power are the least prefferable goals of the controller. 
 
 ### MPC preprocessing. Latency
 
 #### Conversion to a local reference frame:
+
+By default, the car gets global coordinates that need to be converted in local reference frame. The following code snippet shows how this can be done (note that `psi` is positive in clockwise direction):
 
 ```cpp
 // Convert ptsx and ptsy to local reference frame
@@ -74,7 +79,27 @@ for (size_t i=0; i < ptsx.size(); ++i) {
 } 
 ```
 
+#### Latency. Initial state prediction
+
+There is an additional challenge in the system - 100 ms latency that is modelled by the following command: `this_thread::sleep_for(chrono::milliseconds(delay));`. The problem is that MPC controller sees the system 100 ms before actuators are actually applied. The solution is to predict the system state for 100ms in future and use it as an initial condition for MPC controller:
+
+```cpp
+if (delay) 
+{
+  x += v * std::cos(psi_local) * dt;
+  y += v * std::sin(psi_local) * dt;
+  std::vector<double> f_df = polyeval(coeffs, x);
+  psi_local -= v/Lf * steer_value * deg2rad(25.0) * dt;
+  v += throttle_value * dt;
+  cte += v * std::sin(epsi) * dt;
+  epsi -= v/Lf * steer_value * deg2rad(25.0) * dt;
+}
+state << x, y, psi_local, v, cte, epsi;
+```
+
 #### Latency. Prediciton of reference points
+
+Additionally, when the local reference coordinates are calculated for the car, we need to predict car's position after 100 ms as well and then convert them to a local coordinate frame:
 
 ```cpp
 const int delay = 100; 
@@ -92,10 +117,12 @@ if (delay) {
 // conversion to a local reference frame
 ```
 
-#### Latency. Initial state prediction
-
-
-
 ### Results
 
+The following graph compares the reference position of the car and its real position controlled my MPC algorithm. 
+
 ![alt_text][image1]
+
+-----------------------------------------------------------------------------------------------------------------
+
+Note, that the performance of the controller strongly depends on your hardware and it may differ from the results presented above. I used ThinkPad t450s laptop (i5-5200, RAM 12GB, Intel HD 5500). 
