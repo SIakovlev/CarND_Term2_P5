@@ -41,9 +41,9 @@ In this project I have implemented Model Predictive Control algorithm that drive
 
 ### MPC tuning
 
-`N` - finite horizon size (number of predicted timesteps). This parameter heavily depends on computational capabilities, and in my case, I limited myself with `N = 5`. Higher `N` leads to quite interesting effects on the turns: vehicle slightly overshoots but makes the turn without reducing the speed, whereas in case of small `N` it has to push the brake since it was not expecting the turn.
+`N` - finite horizon size (number of predicted timesteps). This parameter heavily depends on computational capabilities, and in my case, I limited myself with `N = 5`. Higher `N` (around 10) leads to quite interesting effects on the turns: vehicle slightly overshoots but makes the turn without reducing the speed, whereas in case of small `N` it has to push the brake since it was not expecting the turn.
 
-`dt` - time step. Again, this parameter depends on computer hardware. In case `dt` is small the controller calculates "very detailed" trajectory consisting of `N` pieces. The price for it is the need for fast computations between consecutive trajectory points. In my case, I observed increasing vehicle wiggling when dt is comparably small to the MPC algorithm execution time. So I set it to `dt = 0.5`.
+`dt` - time step. Again, this parameter depends on computer hardware. In case `dt` is small the controller calculates "very detailed" trajectory consisting of `N` pieces. The price for it is the need for fast computations between consecutive trajectory points. In my case, I observed increasing vehicle wiggling when `dt` is comparably small to the MPC algorithm execution time. So I set it to `dt = 0.5`.
 
 The following code snippet demonstrates how I tuned cost function:
 
